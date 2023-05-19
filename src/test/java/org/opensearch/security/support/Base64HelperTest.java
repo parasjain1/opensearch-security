@@ -11,6 +11,7 @@
 package org.opensearch.security.support;
 
 import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.io.ObjectOutputStream;
 import java.io.Serializable;
 import java.net.InetSocketAddress;
@@ -41,33 +42,33 @@ public class Base64HelperTest {
         return deserializeObjectJDK(serializeObjectJDK(s));
     }
 
-    private static Serializable dsProto(Serializable s) {
+    private static Serializable dsProto(Serializable s) throws IOException {
         return deserializeObjectProto(serializeObjectProto(s));
     }
 
     @Test
-    public void testString() {
+    public void testString() throws IOException {
         String string = "string";
         Assert.assertEquals(string, dsJDK(string));
         Assert.assertEquals(string, dsProto(string));
     }
 
     @Test
-    public void testInteger() {
+    public void testInteger() throws IOException {
         Integer integer = Integer.valueOf(0);
         Assert.assertEquals(integer, dsJDK(integer));
         Assert.assertEquals(integer, dsProto(integer));
     }
 
     @Test
-    public void testDouble() {
+    public void testDouble() throws IOException {
         Double number = Double.valueOf(0.);
         Assert.assertEquals(number, dsJDK(number));
         Assert.assertEquals(number, dsProto(number));
     }
 
     @Test
-    public void testInetSocketAddress() {
+    public void testInetSocketAddress() throws IOException {
         InetSocketAddress inetSocketAddress = new InetSocketAddress(0);
         Assert.assertEquals(inetSocketAddress, dsJDK(inetSocketAddress));
         Assert.assertEquals(inetSocketAddress, dsProto(inetSocketAddress));
@@ -75,7 +76,7 @@ public class Base64HelperTest {
     }
 
     @Test
-    public void testPattern() {
+    public void testPattern() throws IOException {
         Pattern pattern = Pattern.compile(".*");
         Assert.assertEquals(pattern.pattern(), ((Pattern) dsJDK(pattern)).pattern());
         Assert.assertEquals(pattern.pattern(), ((Pattern) dsProto(pattern)).pattern());
@@ -83,14 +84,14 @@ public class Base64HelperTest {
     }
 
     @Test
-    public void testUser() {
+    public void testUser() throws IOException {
         User user = new User("user");
         Assert.assertEquals(user, dsJDK(user));
         Assert.assertEquals(user, dsProto(user));
     }
 
     @Test
-    public void testSourceFieldsContext() {
+    public void testSourceFieldsContext() throws IOException {
         SourceFieldsContext sourceFieldsContext = new SourceFieldsContext(new SearchRequest(""));
         Assert.assertEquals(sourceFieldsContext.toString(), dsJDK(sourceFieldsContext).toString());
         Assert.assertEquals(sourceFieldsContext.toString(), dsProto(sourceFieldsContext).toString());
@@ -98,21 +99,21 @@ public class Base64HelperTest {
     }
 
     @Test
-    public void testHashMap() {
+    public void testHashMap() throws IOException {
         HashMap map = new HashMap();
         Assert.assertEquals(map, dsJDK(map));
         Assert.assertEquals(map, dsProto(map));
     }
 
     @Test
-    public void testArrayList() {
+    public void testArrayList() throws IOException {
         ArrayList list = new ArrayList();
         Assert.assertEquals(list, dsJDK(list));
         Assert.assertEquals(list, dsProto(list));
     }
 
     @Test(expected = OpenSearchException.class)
-    public void notSafeSerializable() {
+    public void notSafeSerializable() throws IOException {
         serializeObjectJDK(new NotSafeSerializable());
         serializeObjectProto(new NotSafeSerializable());
     }
@@ -125,5 +126,10 @@ public class Base64HelperTest {
         }
         deserializeObjectJDK(BaseEncoding.base64().encode(bos.toByteArray()));
         deserializeObjectProto(BaseEncoding.base64().encode(bos.toByteArray()));
+    }
+
+    @Test
+    public void random() throws IOException {
+        new ProtoSerializationWrapper(InetSocketAddress.createUnresolved("localhost", 8000));
     }
 }

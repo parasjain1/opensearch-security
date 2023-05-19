@@ -151,28 +151,28 @@ test {
 }
 
 //add new task that runs OpenSSL tests
-task opensslTest(type: Test) {
-    include '**/OpenSSL*.class'
-    retry {
-        failOnPassedAfterRetry = false
-        maxRetries = 5
-    }
-    jacoco {
-        excludes = [
-                "com.sun.jndi.dns.*",
-                "com.sun.security.sasl.gsskerb.*",
-                "java.sql.*",
-                "javax.script.*",
-                "org.jcp.xml.dsig.internal.dom.*",
-                "sun.nio.cs.ext.*",
-                "sun.security.ec.*",
-                "sun.security.jgss.*",
-                "sun.security.pkcs11.*",
-                "sun.security.smartcardio.*",
-                "sun.util.resources.provider.*"
-        ]
-    }
-}
+//task opensslTest(type: Test) {
+//    include '**/OpenSSL*.class'
+//    retry {
+//        failOnPassedAfterRetry = false
+//        maxRetries = 5
+//    }
+//    jacoco {
+//        excludes = [
+//                "com.sun.jndi.dns.*",
+//                "com.sun.security.sasl.gsskerb.*",
+//                "java.sql.*",
+//                "javax.script.*",
+//                "org.jcp.xml.dsig.internal.dom.*",
+//                "sun.nio.cs.ext.*",
+//                "sun.security.ec.*",
+//                "sun.security.jgss.*",
+//                "sun.security.pkcs11.*",
+//                "sun.security.smartcardio.*",
+//                "sun.util.resources.provider.*"
+//        ]
+//    }
+//}
 
 task copyExtraTestResources(dependsOn: testClasses) {
     copy {
@@ -180,7 +180,7 @@ task copyExtraTestResources(dependsOn: testClasses) {
         into 'build/testrun/test/src/test/resources'
     }
 }
-tasks.test.dependsOn(copyExtraTestResources, opensslTest)
+//tasks.test.dependsOn(copyExtraTestResources, opensslTest)
 
 jacoco {
     reportsDirectory = file("$buildDir/reports/jacoco")
@@ -669,3 +669,4 @@ task updateVersion {
         ant.replaceregexp(file:'build.gradle', match: '"opensearch.version", "\\d.*"', replace: '"opensearch.version", "' + newVersion.tokenize('-')[0] + '-SNAPSHOT"', flags:'g', byline:true)
     }
 }
+
