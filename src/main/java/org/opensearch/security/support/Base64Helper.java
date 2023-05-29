@@ -49,6 +49,8 @@ import java.util.Set;
 import java.util.regex.Pattern;
 
 import com.google.common.base.Preconditions;
+import com.google.common.collect.BiMap;
+import com.google.common.collect.HashBiMap;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.io.BaseEncoding;
@@ -61,6 +63,10 @@ import com.amazon.dlic.auth.ldap.LdapUser;
 
 import org.opensearch.OpenSearchException;
 import org.opensearch.SpecialPermission;
+import org.opensearch.common.io.stream.BytesStreamInput;
+import org.opensearch.common.io.stream.BytesStreamOutput;
+import org.opensearch.common.io.stream.StreamInput;
+import org.opensearch.common.io.stream.Writeable;
 import org.opensearch.core.common.Strings;
 import org.opensearch.security.user.User;
 
@@ -88,9 +94,50 @@ public class Base64Helper {
         Enum.class
     );
 
+
+    private enum CustomSerializationFormat {
+
+        WRITEABLE(1),
+        GENERIC(2);
+
+        private final int id;
+
+        CustomSerializationFormat(int id) {
+            this.id = id;
+        }
+
+        static CustomSerializationFormat fromId(int id) {
+            switch (id) {
+                case 1: return WRITEABLE;
+                case 2: return GENERIC;
+                default: throw new IllegalArgumentException(String.format("%d is not a valid id", id));
+            }
+        }
+
+    }
+
+    private static final ThreadLocal<BiMap<Class<?>, Integer>> writeableClassToIdMap = ThreadLocal.withInitial(HashBiMap::create);
     private static final Set<String> SAFE_CLASS_NAMES = Collections.singleton(
         "org.ldaptive.LdapAttribute$LdapAttributeValues"
     );
+
+    static {
+        registerAllWriteables();
+    }
+
+    /**
+     * Registers all <code>Writeable</code> classes for custom serialization support.
+     * Removing existing classes / changing order of registration will cause a breaking change in the serialization protocol
+     * as <code>registerWriteable</code> assigns an incrementing integer ID to each of the classes in the order it is called
+     * starting from <code>1</code>.
+     *<br/>
+     * New classes can safely be added towards the end.
+     */
+    private static void registerAllWriteables() {
+        registerWriteable(User.class);
+        registerWriteable(LdapUser.class);
+        registerWriteable(SourceFieldsContext.class);
+    }
 
     private static boolean isSafeClass(Class<?> cls) {
         return cls.isArray() ||
@@ -156,7 +203,7 @@ public class Base64Helper {
         }
     }
 
-    public static String serializeObject(final Serializable object) {
+    private static String serializeObjectJDK(final Serializable object) {
 
         Preconditions.checkArgument(object != null, "object must not be null");
 
@@ -170,7 +217,37 @@ public class Base64Helper {
         return BaseEncoding.base64().encode(bytes);
     }
 
-    public static Serializable deserializeObject(final String string) {
+    private static String serializeObjectCustom(final Serializable object) {
+
+        Preconditions.checkArgument(object != null, "object must not be null");
+        final BytesStreamOutput streamOutput = new BytesStreamOutput(128);
+        Class<?> clazz = object.getClass();
+        try {
+            if(isWriteable(clazz)) {
+                streamOutput.writeByte((byte) CustomSerializationFormat.WRITEABLE.id);
+                streamOutput.writeByte((byte) getWriteableClassID(clazz).intValue());
+                ((Writeable) object).writeTo(streamOutput);
+            } else {
+                streamOutput.writeByte((byte) CustomSerializationFormat.GENERIC.id);
+                streamOutput.writeGenericValue(object);
+            }
+        } catch (final Exception e) {
+            throw new OpenSearchException("Instance {} of class {} is not serializable", e, object, object.getClass());
+        }
+        final byte[] bytes = streamOutput.bytes().toBytesRef().bytes;
+        streamOutput.close();
+        return BaseEncoding.base64().encode(bytes);
+    }
+
+    public static String serializeObject(final Serializable object, final boolean useJDKSerialization) {
+        return useJDKSerialization ? serializeObjectJDK(object) : serializeObjectCustom(object);
+    }
+
+    public static String serializeObject(final Serializable object) {
+        return serializeObjectCustom(object);
+    }
+
+    private static Serializable deserializeObjectJDK(final String string) {
 
         Preconditions.checkArgument(!Strings.isNullOrEmpty(string), "string must not be null or empty");
 
@@ -181,6 +258,32 @@ public class Base64Helper {
         } catch (final Exception e) {
             throw new OpenSearchException(e);
         }
+    }
+
+    private static Serializable deserializeObjectCustom(final String string) {
+
+        Preconditions.checkArgument(!Strings.isNullOrEmpty(string), "string must not be null or empty");
+        final byte[] bytes = BaseEncoding.base64().decode(string);
+        try (final BytesStreamInput streamInput = new BytesStreamInput(bytes)) {
+            CustomSerializationFormat serializationFormat = CustomSerializationFormat.fromId(streamInput.readByte());
+            if(serializationFormat.equals(CustomSerializationFormat.WRITEABLE)) {
+                final int classId = streamInput.readByte();
+                Class<?> clazz = getWriteableClassFromId(classId);
+                return (Serializable) clazz.getConstructor(StreamInput.class).newInstance(streamInput);
+            } else {
+                return (Serializable) streamInput.readGenericValue();
+            }
+        } catch (final Exception e) {
+            throw new OpenSearchException(e);
+        }
+    }
+
+    public static Serializable deserializeObject(final String string) {
+        return deserializeObjectCustom(string);
+    }
+
+    public static Serializable deserializeObject(final String string, final boolean useJDKDeserialization) {
+        return useJDKDeserialization ? deserializeObjectJDK(string) : deserializeObjectCustom(string);
     }
 
     private final static class SafeObjectInputStream extends ObjectInputStream {
@@ -199,5 +302,41 @@ public class Base64Helper {
 
             throw new InvalidClassException("Unauthorized deserialization attempt ", clazz.getName());
         }
+    }
+
+    private static boolean isWriteable(Class<?> clazz) {
+        return Writeable.class.isAssignableFrom(clazz);
+    }
+
+    /**
+     * Registers the given <code>Writeable</code> class for custom serialization by assigning an incrementing integer ID
+     * IDs are stored in two thread local maps
+     * @param clazz class to be registered
+     */
+    private static void registerWriteable(Class<? extends Writeable> clazz) {
+        if ( writeableClassToIdMap.get().containsKey(clazz) ) {
+            throw new OpenSearchException("writeable clazz is already registered ", clazz.getName());
+        }
+        int id = writeableClassToIdMap.get().size() + 1;
+        writeableClassToIdMap.get().put(clazz, id);
+    }
+
+    /**
+     * Returns integer ID for the registered Writeable class
+     *
+     * Protected for testing
+     */
+    protected static Integer getWriteableClassID(Class<?> clazz) {
+        if ( !isWriteable(clazz) ) {
+            throw new OpenSearchException("clazz should implement Writeable ", clazz);
+        }
+        if( !writeableClassToIdMap.get().containsKey(clazz) ) {
+            throw new OpenSearchException("Writeable clazz not registered ", clazz);
+        }
+        return writeableClassToIdMap.get().get(clazz);
+    }
+
+    private static Class<?> getWriteableClassFromId(int id) {
+        return writeableClassToIdMap.get().inverse().get(id);
     }
 }
