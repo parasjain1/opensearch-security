@@ -38,6 +38,7 @@ import org.apache.commons.lang3.StringUtils;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
+import org.opensearch.Version;
 import org.opensearch.action.admin.cluster.shards.ClusterSearchShardsAction;
 import org.opensearch.action.admin.cluster.shards.ClusterSearchShardsResponse;
 import org.opensearch.action.get.GetRequest;
@@ -58,6 +59,7 @@ import org.opensearch.security.ssl.transport.PrincipalExtractor;
 import org.opensearch.security.ssl.transport.SSLConfig;
 import org.opensearch.security.support.Base64Helper;
 import org.opensearch.security.support.ConfigConstants;
+import org.opensearch.security.support.HeaderHelper;
 import org.opensearch.security.user.User;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.Transport.Connection;
@@ -146,6 +148,8 @@ public class SecurityInterceptor {
         final String origCCSTransientMf = getThreadContext().getTransient(ConfigConstants.OPENDISTRO_SECURITY_MASKED_FIELD_CCS);
 
         final boolean isDebugEnabled = log.isDebugEnabled();
+        final boolean useJDKSerialization = connection.getVersion().before(Version.V_3_0_0);
+
         try (ThreadContext.StoredContext stashedContext = getThreadContext().stashContext()) {
             final TransportResponseHandler<T> restoringHandler = new RestoringTransportResponseHandler<T>(handler, stashedContext);
             getThreadContext().putHeader("_opendistro_security_remotecn", cs.getClusterName().value());
@@ -221,9 +225,23 @@ public class SecurityInterceptor {
                 );
             }
 
+            if (useJDKSerialization) {
+                Map<String, String> jdkSerializedHeaders = new HashMap<>();
+                HeaderHelper.getAllSerializedHeaderNames()
+                    .stream()
+                    .filter(k -> headerMap.get(k) != null)
+                    .forEach(
+                        k -> jdkSerializedHeaders.put(
+                            k,
+                            Base64Helper.serializeObject(Base64Helper.deserializeObject(headerMap.get(k)), true)
+                        )
+                    );
+                headerMap.putAll(jdkSerializedHeaders);
+            }
+
             getThreadContext().putHeader(headerMap);
 
-            ensureCorrectHeaders(remoteAddress0, user0, origin0, injectedUserString, injectedRolesString);
+            ensureCorrectHeaders(remoteAddress0, user0, origin0, injectedUserString, injectedRolesString, useJDKSerialization);
 
             if (isActionTraceEnabled()) {
                 getThreadContext().putHeader(
@@ -249,7 +267,8 @@ public class SecurityInterceptor {
         final User origUser,
         final String origin,
         final String injectedUserString,
-        final String injectedRolesString
+        final String injectedRolesString,
+        final boolean useJDKSerialization
     ) {
         // keep original address
 
@@ -270,7 +289,7 @@ public class SecurityInterceptor {
             if (remoteAddressHeader == null) {
                 getThreadContext().putHeader(
                     ConfigConstants.OPENDISTRO_SECURITY_REMOTE_ADDRESS_HEADER,
-                    Base64Helper.serializeObject(((TransportAddress) remoteAdr).address())
+                    Base64Helper.serializeObject(((TransportAddress) remoteAdr).address(), useJDKSerialization)
                 );
             }
         }
@@ -279,7 +298,10 @@ public class SecurityInterceptor {
 
         if (userHeader == null) {
             if (origUser != null) {
-                getThreadContext().putHeader(ConfigConstants.OPENDISTRO_SECURITY_USER_HEADER, Base64Helper.serializeObject(origUser));
+                getThreadContext().putHeader(
+                    ConfigConstants.OPENDISTRO_SECURITY_USER_HEADER,
+                    Base64Helper.serializeObject(origUser, useJDKSerialization)
+                );
             } else if (StringUtils.isNotEmpty(injectedRolesString)) {
                 getThreadContext().putHeader(ConfigConstants.OPENDISTRO_SECURITY_INJECTED_ROLES_HEADER, injectedRolesString);
             } else if (StringUtils.isNotEmpty(injectedUserString)) {
