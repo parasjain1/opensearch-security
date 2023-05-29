@@ -46,16 +46,11 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.regex.Pattern;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.io.BaseEncoding;
-import org.ldaptive.AbstractLdapBean;
-import org.ldaptive.LdapAttribute;
-import org.ldaptive.LdapEntry;
-import org.ldaptive.SearchEntry;
 
 import com.amazon.dlic.auth.ldap.LdapUser;
 
@@ -68,28 +63,23 @@ public class Base64Helper {
 
     private static final Set<Class<?>> SAFE_CLASSES = ImmutableSet.of(
         String.class,
-        SocketAddress.class,
+        InetAddress.class,
         InetSocketAddress.class,
-        Pattern.class,
         User.class,
         SourceFieldsContext.class,
         LdapUser.class,
-        SearchEntry.class,
-        LdapEntry.class,
-        AbstractLdapBean.class,
-        LdapAttribute.class
+        SocketAddress.class
     );
 
     private static final List<Class<?>> SAFE_ASSIGNABLE_FROM_CLASSES = ImmutableList.of(
-        InetAddress.class,
         Number.class,
         Collection.class,
         Map.class,
         Enum.class
     );
 
-    private static final Set<String> SAFE_CLASS_NAMES = Collections.singleton(
-        "org.ldaptive.LdapAttribute$LdapAttributeValues"
+    private static final Set<String> SAFE_CLASS_NAMES = Collections.emptySet(
+
     );
 
     private static boolean isSafeClass(Class<?> cls) {
