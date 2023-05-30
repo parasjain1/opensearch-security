@@ -103,7 +103,7 @@ public class SecurityRequestHandler<T extends TransportRequest> extends Security
             resolvedActionClass = ((ConcreteShardRequest<?>) request).getRequest().getClass().getSimpleName();
         }
 
-        final boolean useJDKSerialization = transportChannel.getVersion().before(Version.V_2_7_0);
+        final boolean useJDKSerialization = transportChannel.getVersion().before(Version.V_3_0_0);
 
         if(useJDKSerialization) {
             HeaderHelper.serializeHeadersUsingProtoForVersionUpgrade(getThreadContext());
