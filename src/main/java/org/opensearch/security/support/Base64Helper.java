@@ -66,8 +66,11 @@ import org.opensearch.SpecialPermission;
 import org.opensearch.common.io.stream.BytesStreamInput;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.common.io.stream.StreamInput;
+import org.opensearch.common.io.stream.StreamOutput;
 import org.opensearch.common.io.stream.Writeable;
 import org.opensearch.core.common.Strings;
+import org.opensearch.core.common.io.stream.BaseWriteable;
+import org.opensearch.core.common.io.stream.BaseWriteable.WriteableRegistry;
 import org.opensearch.security.user.User;
 
 public class Base64Helper {
@@ -122,21 +125,8 @@ public class Base64Helper {
     );
 
     static {
+        registerStreamables();
         registerAllWriteables();
-    }
-
-    /**
-     * Registers all <code>Writeable</code> classes for custom serialization support.
-     * Removing existing classes / changing order of registration will cause a breaking change in the serialization protocol
-     * as <code>registerWriteable</code> assigns an incrementing integer ID to each of the classes in the order it is called
-     * starting from <code>1</code>.
-     *<br/>
-     * New classes can safely be added towards the end.
-     */
-    private static void registerAllWriteables() {
-        registerWriteable(User.class);
-        registerWriteable(LdapUser.class);
-        registerWriteable(SourceFieldsContext.class);
     }
 
     private static boolean isSafeClass(Class<?> cls) {
@@ -309,21 +299,8 @@ public class Base64Helper {
     }
 
     /**
-     * Registers the given <code>Writeable</code> class for custom serialization by assigning an incrementing integer ID
-     * IDs are stored in two thread local maps
-     * @param clazz class to be registered
-     */
-    private static void registerWriteable(Class<? extends Writeable> clazz) {
-        if ( writeableClassToIdMap.get().containsKey(clazz) ) {
-            throw new OpenSearchException("writeable clazz is already registered ", clazz.getName());
-        }
-        int id = writeableClassToIdMap.get().size() + 1;
-        writeableClassToIdMap.get().put(clazz, id);
-    }
-
-    /**
      * Returns integer ID for the registered Writeable class
-     *
+     * <br/>
      * Protected for testing
      */
     protected static Integer getWriteableClassID(Class<?> clazz) {
@@ -338,5 +315,56 @@ public class Base64Helper {
 
     private static Class<?> getWriteableClassFromId(int id) {
         return writeableClassToIdMap.get().inverse().get(id);
+    }
+
+    /**
+     * Registers the given <code>Writeable</code> class for custom serialization by assigning an incrementing integer ID
+     * IDs are stored in two thread local maps
+     * @param clazz class to be registered
+     */
+    private static void registerWriteable(Class<? extends Writeable> clazz) {
+        if ( writeableClassToIdMap.get().containsKey(clazz) ) {
+            throw new OpenSearchException("writeable clazz is already registered ", clazz.getName());
+        }
+        int id = writeableClassToIdMap.get().size() + 1;
+        writeableClassToIdMap.get().put(clazz, id);
+    }
+
+    /**
+     * Registers all <code>Writeable</code> classes for custom serialization support.
+     * Removing existing classes / changing order of registration will cause a breaking change in the serialization protocol
+     * as <code>registerWriteable</code> assigns an incrementing integer ID to each of the classes in the order it is called
+     * starting from <code>1</code>.
+     *<br/>
+     * New classes can safely be added towards the end.
+     */
+    private static void registerAllWriteables() {
+        registerWriteable(User.class);
+        registerWriteable(LdapUser.class);
+        registerWriteable(SourceFieldsContext.class);
+    }
+
+    private static void registerStreamables() {
+        registerGenericWriters();
+        registerGenericReaders();
+    }
+
+    private static void registerGenericWriters() {
+        WriteableRegistry.<BaseWriteable.Writer<StreamOutput, ?>>registerWriter(InetSocketAddress.class, (o, v) -> {
+            final InetSocketAddress inetSocketAddress = (InetSocketAddress) v;
+            o.writeByte((byte) 101);
+            o.writeString(inetSocketAddress.getHostString());
+            o.writeByteArray(inetSocketAddress.getAddress().getAddress());
+            o.writeInt(inetSocketAddress.getPort());
+        });
+    }
+
+    public static void registerGenericReaders() {
+        WriteableRegistry.<BaseWriteable.Reader<StreamInput, ?>>registerReader((byte) 101, (i) -> {
+            String host = i.readString();
+            byte[] addressBytes = i.readByteArray();
+            int port = i.readInt();
+            return new InetSocketAddress(InetAddress.getByAddress(host, addressBytes), port);
+        });
     }
 }
