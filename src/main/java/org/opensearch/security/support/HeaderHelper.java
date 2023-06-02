@@ -28,8 +28,7 @@ package org.opensearch.security.support;
 
 import java.io.Serializable;
 import java.util.Arrays;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.List;
 
 import com.google.common.base.Strings;
 
@@ -71,7 +70,7 @@ public class HeaderHelper {
         final String objectAsBase64 = getSafeFromHeader(context, headerName);
 
         if (!Strings.isNullOrEmpty(objectAsBase64)) {
-            return Base64Helper.deserializeObject(objectAsBase64);
+            return Base64Helper.deserializeObject(objectAsBase64, context.getTransient(ConfigConstants.USE_JDK_SERIALIZATION));
         }
 
         return null;
@@ -81,15 +80,8 @@ public class HeaderHelper {
         return context.getTransient(ConfigConstants.OPENDISTRO_SECURITY_SSL_TRANSPORT_TRUSTED_CLUSTER_REQUEST) == Boolean.TRUE;
     }
 
-    /**
-     * Returns all headers present in <code>ThreadContext::getHeaders()</code> which have values serialized within
-     * the security plugin
-     * @param context current ThreadContext
-     * @return Map containing all serialized headers
-     */
-    public static Map<String, String> getAllSerializedHeaders(ThreadContext context) {
-        Map<String, String> headerMap = new HashMap<>();
-        Arrays.asList(
+    public static List<String> getAllSerializedHeaderNames() {
+        return Arrays.asList(
                 ConfigConstants.OPENDISTRO_SECURITY_REMOTE_ADDRESS_HEADER,
                 ConfigConstants.OPENDISTRO_SECURITY_USER_HEADER,
                 ConfigConstants.OPENDISTRO_SECURITY_DLS_QUERY_HEADER,
@@ -97,20 +89,6 @@ public class HeaderHelper {
                 ConfigConstants.OPENDISTRO_SECURITY_MASKED_FIELD_HEADER,
                 ConfigConstants.OPENDISTRO_SECURITY_DLS_FILTER_LEVEL_QUERY_HEADER,
                 ConfigConstants.OPENDISTRO_SECURITY_SOURCE_FIELD_CONTEXT
-        ).forEach(headerName -> {
-            String headerValue = context.getHeader(headerName);
-            if(headerValue != null) {
-                headerMap.put(headerName, headerValue);
-            }
-        });
-        return headerMap;
-    }
-
-    public static void serializeHeadersUsingJdkForVersionUpgrade(ThreadContext context) {
-        HeaderHelper.getAllSerializedHeaders(context).forEach((key, value) -> context.putHeader(key, Base64Helper.serializeObject(Base64Helper.deserializeObject(value), true)));
-    }
-
-    public static void serializeHeadersUsingProtoForVersionUpgrade(ThreadContext context) {
-        HeaderHelper.getAllSerializedHeaders(context).forEach((key, value) -> context.putHeader(key, Base64Helper.serializeObject(Base64Helper.deserializeObject(value, true))));
+        );
     }
 }

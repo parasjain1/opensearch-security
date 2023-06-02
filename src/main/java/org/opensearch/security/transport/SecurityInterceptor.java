@@ -199,16 +199,18 @@ public class SecurityInterceptor {
                 getThreadContext().putHeader(ConfigConstants.OPENDISTRO_SECURITY_INJECTED_ROLES_VALIDATION_HEADER, injectedRolesValidationString);
             }
 
+            if(useJDKSerialization) {
+                Map<String, String> jdkSerializedHeaders = new HashMap<>();
+                HeaderHelper.getAllSerializedHeaderNames().stream().filter(k -> headerMap.get(k) != null).forEach(k -> jdkSerializedHeaders.put(k, Base64Helper.serializeObject(Base64Helper.deserializeObject(headerMap.get(k)), true)));
+                headerMap.putAll(jdkSerializedHeaders);
+            }
+
             getThreadContext().putHeader(headerMap);
 
-            ensureCorrectHeaders(remoteAddress0, user0, origin0, injectedUserString, injectedRolesString);
+            ensureCorrectHeaders(remoteAddress0, user0, origin0, injectedUserString, injectedRolesString, useJDKSerialization);
 
             if (isActionTraceEnabled()) {
                 getThreadContext().putHeader("_opendistro_security_trace"+System.currentTimeMillis()+"#"+UUID.randomUUID().toString(), Thread.currentThread().getName()+" IC -> "+action+" "+getThreadContext().getHeaders().entrySet().stream().filter(p->!p.getKey().startsWith("_opendistro_security_trace")).collect(Collectors.toMap(p -> p.getKey(), p -> p.getValue())));
-            }
-
-            if (useJDKSerialization) {
-                HeaderHelper.serializeHeadersUsingJdkForVersionUpgrade(getThreadContext());
             }
 
             sender.sendRequest(connection, action, request, options, restoringHandler);
@@ -216,7 +218,8 @@ public class SecurityInterceptor {
     }
 
     private void ensureCorrectHeaders(final Object remoteAdr, final User origUser, final String origin,
-                                      final String injectedUserString, final String injectedRolesString) {
+                                      final String injectedUserString, final String injectedRolesString,
+                                      final boolean useJDKSerialization) {
         // keep original address
 
         if(origin != null && !origin.isEmpty() /*&& !Origin.LOCAL.toString().equalsIgnoreCase(origin)*/ && getThreadContext().getHeader(ConfigConstants.OPENDISTRO_SECURITY_ORIGIN_HEADER) == null) {
@@ -232,7 +235,7 @@ public class SecurityInterceptor {
             String remoteAddressHeader = getThreadContext().getHeader(ConfigConstants.OPENDISTRO_SECURITY_REMOTE_ADDRESS_HEADER);
 
             if(remoteAddressHeader == null) {
-                getThreadContext().putHeader(ConfigConstants.OPENDISTRO_SECURITY_REMOTE_ADDRESS_HEADER, Base64Helper.serializeObject(((TransportAddress) remoteAdr).address()));
+                getThreadContext().putHeader(ConfigConstants.OPENDISTRO_SECURITY_REMOTE_ADDRESS_HEADER, Base64Helper.serializeObject(((TransportAddress) remoteAdr).address(), useJDKSerialization));
             }
         }
 
@@ -241,7 +244,7 @@ public class SecurityInterceptor {
 
         if(userHeader == null) {
             if(origUser != null) {
-                getThreadContext().putHeader(ConfigConstants.OPENDISTRO_SECURITY_USER_HEADER, Base64Helper.serializeObject(origUser));
+                getThreadContext().putHeader(ConfigConstants.OPENDISTRO_SECURITY_USER_HEADER, Base64Helper.serializeObject(origUser, useJDKSerialization));
             }
             else if(StringUtils.isNotEmpty(injectedRolesString)) {
                 getThreadContext().putHeader(ConfigConstants.OPENDISTRO_SECURITY_INJECTED_ROLES_HEADER, injectedRolesString);
