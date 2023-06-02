@@ -99,7 +99,8 @@ public class Base64Helper {
     private enum CustomSerializationFormat {
 
         WRITEABLE(1),
-        GENERIC(2);
+        STREAMABLE(2),
+        GENERIC(3);
 
         private final int id;
 
@@ -110,7 +111,8 @@ public class Base64Helper {
         static CustomSerializationFormat fromId(int id) {
             switch (id) {
                 case 1: return WRITEABLE;
-                case 2: return GENERIC;
+                case 2: return STREAMABLE;
+                case 3: return GENERIC;
                 default: throw new IllegalArgumentException(String.format("%d is not a valid id", id));
             }
         }
@@ -124,7 +126,6 @@ public class Base64Helper {
     );
 
     static {
-        registerStreamables();
         registerAllWriteables();
     }
 
@@ -212,13 +213,23 @@ public class Base64Helper {
         final BytesStreamOutput streamOutput = new BytesStreamOutput(128);
         Class<?> clazz = object.getClass();
         try {
-            if(isWriteable(clazz)) {
-                streamOutput.writeByte((byte) CustomSerializationFormat.WRITEABLE.id);
-                streamOutput.writeByte((byte) getWriteableClassID(clazz).intValue());
-                ((Writeable) object).writeTo(streamOutput);
-            } else {
-                streamOutput.writeByte((byte) CustomSerializationFormat.GENERIC.id);
-                streamableRegistry.writeTo(streamOutput, object);
+            CustomSerializationFormat customSerializationFormat = getCustomSerializationMode(clazz);
+            switch (customSerializationFormat) {
+                case WRITEABLE:
+                    streamOutput.writeByte((byte) CustomSerializationFormat.WRITEABLE.id);
+                    streamOutput.writeByte((byte) getWriteableClassID(clazz).intValue());
+                    ((Writeable) object).writeTo(streamOutput);
+                    break;
+                case STREAMABLE:
+                    streamOutput.writeByte((byte) CustomSerializationFormat.STREAMABLE.id);
+                    streamableRegistry.writeTo(streamOutput, object);
+                    break;
+                case GENERIC:
+                    streamOutput.writeByte((byte) CustomSerializationFormat.GENERIC.id);
+                    streamOutput.writeGenericValue(object);
+                    break;
+                default:
+                    throw new IllegalArgumentException(String.format("Could not determine custom serialization mode for class %s", clazz.getName()));
             }
         } catch (final Exception e) {
             throw new OpenSearchException("Instance {} of class {} is not serializable", e, object, object.getClass());
@@ -255,12 +266,17 @@ public class Base64Helper {
         final byte[] bytes = BaseEncoding.base64().decode(string);
         try (final BytesStreamInput streamInput = new BytesStreamInput(bytes)) {
             CustomSerializationFormat serializationFormat = CustomSerializationFormat.fromId(streamInput.readByte());
-            if(serializationFormat.equals(CustomSerializationFormat.WRITEABLE)) {
-                final int classId = streamInput.readByte();
-                Class<?> clazz = getWriteableClassFromId(classId);
-                return (Serializable) clazz.getConstructor(StreamInput.class).newInstance(streamInput);
-            } else {
-                return (Serializable) streamableRegistry.readFrom(streamInput);
+            switch (serializationFormat) {
+                case WRITEABLE:
+                    final int classId = streamInput.readByte();
+                    Class<?> clazz = getWriteableClassFromId(classId);
+                    return (Serializable) clazz.getConstructor(StreamInput.class).newInstance(streamInput);
+                case STREAMABLE:
+                    return (Serializable) streamableRegistry.readFrom(streamInput);
+                case GENERIC:
+                    return (Serializable) streamInput.readGenericValue();
+                default:
+                    throw new IllegalArgumentException("Could not determine custom deserialization mode");
             }
         } catch (final Exception e) {
             throw new OpenSearchException(e);
@@ -344,20 +360,14 @@ public class Base64Helper {
         registerWriteable(SourceFieldsContext.class);
     }
 
-    private static void registerStreamables() {
-        streamableRegistry.registerStreamable(
-                InetSocketAddress.class,
-                (Writeable.Writer<Object>) (o, v) -> {
-                    final InetSocketAddress inetSocketAddress = (InetSocketAddress) v;
-                    o.writeString(inetSocketAddress.getHostString());
-                    o.writeByteArray(inetSocketAddress.getAddress().getAddress());
-                    o.writeInt(inetSocketAddress.getPort());
-                },
-                (Writeable.Reader<Object>) (i) -> {
-                    String host = i.readString();
-                    byte[] addressBytes = i.readByteArray();
-                    int port = i.readInt();
-                    return new InetSocketAddress(InetAddress.getByAddress(host, addressBytes), port);
-                });
+    private static CustomSerializationFormat getCustomSerializationMode(Class<?> clazz) {
+        if ( isWriteable(clazz) ) {
+            return CustomSerializationFormat.WRITEABLE;
+        } else if (streamableRegistry.isStreamable(clazz) ) {
+            return CustomSerializationFormat.STREAMABLE;
+        } else {
+            return CustomSerializationFormat.GENERIC;
+        }
     }
+
 }

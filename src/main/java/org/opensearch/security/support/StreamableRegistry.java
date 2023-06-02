@@ -1,6 +1,8 @@
 package org.opensearch.security.support;
 
 import java.io.IOException;
+import java.net.InetAddress;
+import java.net.InetSocketAddress;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -10,6 +12,7 @@ import com.google.common.collect.HashBiMap;
 import org.opensearch.OpenSearchException;
 import org.opensearch.common.io.stream.StreamInput;
 import org.opensearch.common.io.stream.StreamOutput;
+import org.opensearch.common.io.stream.Writeable;
 import org.opensearch.core.common.io.stream.BaseWriteable;
 
 /**
@@ -27,7 +30,9 @@ public class StreamableRegistry {
     public final BiMap<Class<?>, Integer> classToIdMap = HashBiMap.create();
     private final Map<Integer, Entry> idToEntryMap = new HashMap<>();
 
-    private StreamableRegistry() {}
+    private StreamableRegistry() {
+        registerAllStreamables();
+    }
 
     private static class Entry {
         BaseWriteable.Writer<StreamOutput, Object> writer;
@@ -60,6 +65,10 @@ public class StreamableRegistry {
         return classToIdMap.get(clazz);
     }
 
+    protected boolean isStreamable(Class<?> clazz) {
+        return classToIdMap.containsKey(clazz);
+    }
+
     protected void writeTo(StreamOutput out, Object object) throws IOException {
         out.writeByte((byte) getId(object.getClass()));
         getWriter(object.getClass()).write(out, object);
@@ -78,6 +87,39 @@ public class StreamableRegistry {
         Integer id = classToIdMap.size() + 1;
         classToIdMap.put(clazz, id);
         idToEntryMap.put(id, new Entry(writer, reader));
+    }
+
+    protected int getStreamableID(Class<?> clazz) {
+        if (!isStreamable(clazz)) {
+            throw new OpenSearchException(String.format("class %s is in streamable registry", clazz.getName()));
+        }  else {
+            return classToIdMap.get(clazz);
+        }
+    }
+
+    /**
+     * Register all streamables here. Register new streamables towards the end.
+     * Removing / reordering a registered streamable will change the typeIDs associated with the streamables
+     * causing a breaking change in the serialization format.
+     */
+    private void registerAllStreamables() {
+
+        // InetSocketAddress
+        this.registerStreamable(
+            InetSocketAddress.class,
+            (Writeable.Writer<Object>) (o, v) -> {
+                final InetSocketAddress inetSocketAddress = (InetSocketAddress) v;
+                o.writeString(inetSocketAddress.getHostString());
+                o.writeByteArray(inetSocketAddress.getAddress().getAddress());
+                o.writeInt(inetSocketAddress.getPort());
+            },
+            (Writeable.Reader<Object>) (i) -> {
+                String host = i.readString();
+                byte[] addressBytes = i.readByteArray();
+                int port = i.readInt();
+                return new InetSocketAddress(InetAddress.getByAddress(host, addressBytes), port);
+            })
+        ;
     }
 
 }

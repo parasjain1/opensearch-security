@@ -133,9 +133,12 @@ public class Base64HelperTest {
 
     @Test
     public void testGetWriteableClassID() {
+        // a need to make a change in this test signifies a breaking change in security plugin's custom serialization
+        // format
         Assert.assertEquals(Integer.valueOf(1), Base64Helper.getWriteableClassID(User.class));
         Assert.assertEquals(Integer.valueOf(2), Base64Helper.getWriteableClassID(LdapUser.class));
-        Assert.assertEquals(Integer.valueOf(3), Base64Helper.getWriteableClassID(SourceFieldsContext.class));
+        Assert.assertEquals(Integer.valueOf(3), Base64Helper.getWriteableClassID(UserInjector.InjectedUser.class));
+        Assert.assertEquals(Integer.valueOf(4), Base64Helper.getWriteableClassID(SourceFieldsContext.class));
     }
 
     @Test
