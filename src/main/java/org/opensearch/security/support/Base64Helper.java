@@ -66,11 +66,9 @@ import org.opensearch.SpecialPermission;
 import org.opensearch.common.io.stream.BytesStreamInput;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.common.io.stream.StreamInput;
-import org.opensearch.common.io.stream.StreamOutput;
 import org.opensearch.common.io.stream.Writeable;
 import org.opensearch.core.common.Strings;
-import org.opensearch.core.common.io.stream.BaseWriteable;
-import org.opensearch.core.common.io.stream.BaseWriteable.WriteableRegistry;
+import org.opensearch.security.auth.UserInjector;
 import org.opensearch.security.user.User;
 
 public class Base64Helper {
@@ -120,6 +118,7 @@ public class Base64Helper {
     }
 
     private static final ThreadLocal<BiMap<Class<?>, Integer>> writeableClassToIdMap = ThreadLocal.withInitial(HashBiMap::create);
+    private static final StreamableRegistry streamableRegistry = StreamableRegistry.getInstance();
     private static final Set<String> SAFE_CLASS_NAMES = Collections.singleton(
         "org.ldaptive.LdapAttribute$LdapAttributeValues"
     );
@@ -219,7 +218,7 @@ public class Base64Helper {
                 ((Writeable) object).writeTo(streamOutput);
             } else {
                 streamOutput.writeByte((byte) CustomSerializationFormat.GENERIC.id);
-                streamOutput.writeGenericValue(object);
+                streamableRegistry.writeTo(streamOutput, object);
             }
         } catch (final Exception e) {
             throw new OpenSearchException("Instance {} of class {} is not serializable", e, object, object.getClass());
@@ -261,7 +260,7 @@ public class Base64Helper {
                 Class<?> clazz = getWriteableClassFromId(classId);
                 return (Serializable) clazz.getConstructor(StreamInput.class).newInstance(streamInput);
             } else {
-                return (Serializable) streamInput.readGenericValue();
+                return (Serializable) streamableRegistry.readFrom(streamInput);
             }
         } catch (final Exception e) {
             throw new OpenSearchException(e);
@@ -341,30 +340,24 @@ public class Base64Helper {
     private static void registerAllWriteables() {
         registerWriteable(User.class);
         registerWriteable(LdapUser.class);
+        registerWriteable(UserInjector.InjectedUser.class);
         registerWriteable(SourceFieldsContext.class);
     }
 
     private static void registerStreamables() {
-        registerGenericWriters();
-        registerGenericReaders();
-    }
-
-    private static void registerGenericWriters() {
-        WriteableRegistry.<BaseWriteable.Writer<StreamOutput, ?>>registerWriter(InetSocketAddress.class, (o, v) -> {
-            final InetSocketAddress inetSocketAddress = (InetSocketAddress) v;
-            o.writeByte((byte) 101);
-            o.writeString(inetSocketAddress.getHostString());
-            o.writeByteArray(inetSocketAddress.getAddress().getAddress());
-            o.writeInt(inetSocketAddress.getPort());
-        });
-    }
-
-    public static void registerGenericReaders() {
-        WriteableRegistry.<BaseWriteable.Reader<StreamInput, ?>>registerReader((byte) 101, (i) -> {
-            String host = i.readString();
-            byte[] addressBytes = i.readByteArray();
-            int port = i.readInt();
-            return new InetSocketAddress(InetAddress.getByAddress(host, addressBytes), port);
-        });
+        streamableRegistry.registerStreamable(
+                InetSocketAddress.class,
+                (Writeable.Writer<Object>) (o, v) -> {
+                    final InetSocketAddress inetSocketAddress = (InetSocketAddress) v;
+                    o.writeString(inetSocketAddress.getHostString());
+                    o.writeByteArray(inetSocketAddress.getAddress().getAddress());
+                    o.writeInt(inetSocketAddress.getPort());
+                },
+                (Writeable.Reader<Object>) (i) -> {
+                    String host = i.readString();
+                    byte[] addressBytes = i.readByteArray();
+                    int port = i.readInt();
+                    return new InetSocketAddress(InetAddress.getByAddress(host, addressBytes), port);
+                });
     }
 }

@@ -17,14 +17,16 @@ import java.net.InetSocketAddress;
 import java.util.ArrayList;
 import java.util.HashMap;
 
-import com.amazon.dlic.auth.ldap.LdapUser;
 import com.google.common.io.BaseEncoding;
 import org.junit.Assert;
 import org.junit.Test;
-
 import org.ldaptive.LdapEntry;
+
+import com.amazon.dlic.auth.ldap.LdapUser;
+
 import org.opensearch.OpenSearchException;
 import org.opensearch.action.search.SearchRequest;
+import org.opensearch.security.auth.UserInjector;
 import org.opensearch.security.user.AuthCredentials;
 import org.opensearch.security.user.User;
 
@@ -134,6 +136,22 @@ public class Base64HelperTest {
         Assert.assertEquals(Integer.valueOf(1), Base64Helper.getWriteableClassID(User.class));
         Assert.assertEquals(Integer.valueOf(2), Base64Helper.getWriteableClassID(LdapUser.class));
         Assert.assertEquals(Integer.valueOf(3), Base64Helper.getWriteableClassID(SourceFieldsContext.class));
+    }
+
+    @Test
+    public void testInjectedUser() {
+        UserInjector.InjectedUser injectedUser = new UserInjector.InjectedUser("username");
+
+        // we expect to get User object when deserializing InjectedUser via JDK serialization
+        User user = new User("username");
+        User deserializedUser = (User) dsJDK(injectedUser);
+        Assert.assertEquals(user, deserializedUser);
+        Assert.assertTrue(deserializedUser.isInjected());
+
+        // for custom serialization, we expect InjectedUser to be returned on deserialization
+        UserInjector.InjectedUser deserializedInjecteduser = (UserInjector.InjectedUser) ds(injectedUser);
+        Assert.assertEquals(injectedUser, deserializedInjecteduser);
+        Assert.assertTrue(deserializedInjecteduser.isInjected());
     }
 
 }
