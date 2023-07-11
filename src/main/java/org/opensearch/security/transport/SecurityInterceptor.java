@@ -271,8 +271,8 @@ public class SecurityInterceptor {
         final String origin,
         final String injectedUserString,
         final String injectedRolesString,
+        boolean isSameNodeRequest, 
         final boolean useJDKSerialization
-        boolean isSameNodeRequest
     ) {
         // keep original address
 
