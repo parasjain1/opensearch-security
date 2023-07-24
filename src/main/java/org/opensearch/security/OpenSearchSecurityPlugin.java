@@ -80,7 +80,7 @@ import org.opensearch.common.component.Lifecycle.State;
 import org.opensearch.common.component.LifecycleComponent;
 import org.opensearch.common.component.LifecycleListener;
 import org.opensearch.common.inject.Inject;
-import org.opensearch.common.io.stream.NamedWriteableRegistry;
+import org.opensearch.core.common.io.stream.NamedWriteableRegistry;
 import org.opensearch.common.logging.DeprecationLogger;
 import org.opensearch.common.network.NetworkModule;
 import org.opensearch.common.network.NetworkService;

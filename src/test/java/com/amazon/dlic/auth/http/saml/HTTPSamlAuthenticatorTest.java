@@ -43,7 +43,7 @@ import org.opensaml.saml.saml2.core.NameIDType;
 
 import org.opensearch.common.bytes.BytesArray;
 import org.opensearch.common.bytes.BytesReference;
-import org.opensearch.common.io.stream.BytesStreamOutput;
+import org.opensearch.core.common.io.stream.BytesStreamOutput;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.core.xcontent.XContentBuilder;

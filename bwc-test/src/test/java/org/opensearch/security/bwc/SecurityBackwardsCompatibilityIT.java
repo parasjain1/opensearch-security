@@ -7,6 +7,7 @@
  */
 package org.opensearch.security.bwc;
 
+import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -16,11 +17,13 @@ import org.junit.Assume;
 import org.junit.Before;
 
 import org.opensearch.Version;
+import org.opensearch.client.Response;
 import org.opensearch.common.settings.Settings;
+import org.opensearch.security.bwc.helpers.TestHelper;
 import org.opensearch.test.rest.OpenSearchRestTestCase;
 
-import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.hasItem;
+
 
 public class SecurityBackwardsCompatibilityIT extends OpenSearchRestTestCase {
 
@@ -63,6 +66,8 @@ public class SecurityBackwardsCompatibilityIT extends OpenSearchRestTestCase {
 
     public void testBasicBackwardsCompatibility() throws Exception {
         String round = System.getProperty("tests.rest.bwcsuite_round");
+
+        createIndex("test_index");
 
         if (round.equals("first") || round.equals("old")) {
             assertPluginUpgrade("_nodes/" + CLUSTER_NAME + "-0/plugins");
@@ -108,5 +113,36 @@ public class SecurityBackwardsCompatibilityIT extends OpenSearchRestTestCase {
             }
 
         }
+    }
+
+    private void createIndex(String index) throws IOException {
+        String settings = "{\n" +
+                "  \"settings\": {\n" +
+                "    \"index\": {\n" +
+                "      \"number_of_shards\": 3,\n" +
+                "      \"number_of_replicas\": 1\n" +
+                "    }\n" +
+                "  },\n" +
+                "  \"mappings\": {\n" +
+                "    \"properties\": {\n" +
+                "      \"age\": {\n" +
+                "        \"type\": \"integer\"\n" +
+                "      }\n" +
+                "    }\n" +
+                "  },\n" +
+                "  \"aliases\": {\n" +
+                "    \"sample-alias1\": {}\n" +
+                "  }\n" +
+                "}";
+        Response response = TestHelper.makeRequest(
+                client(),
+                "PUT",
+                index,
+                null,
+                TestHelper.toHttpEntity(settings),
+                null,
+                false
+        );
+        logger.info(response.getStatusLine());
     }
 }

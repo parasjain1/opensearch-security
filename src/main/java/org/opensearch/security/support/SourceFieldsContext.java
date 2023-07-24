@@ -33,9 +33,9 @@ import java.util.Objects;
 
 import org.opensearch.action.get.GetRequest;
 import org.opensearch.action.search.SearchRequest;
-import org.opensearch.common.io.stream.StreamInput;
-import org.opensearch.common.io.stream.StreamOutput;
-import org.opensearch.common.io.stream.Writeable;
+import org.opensearch.core.common.io.stream.StreamInput;
+import org.opensearch.core.common.io.stream.StreamOutput;
+import org.opensearch.core.common.io.stream.Writeable;
 
 public class SourceFieldsContext implements Serializable, Writeable {
 
