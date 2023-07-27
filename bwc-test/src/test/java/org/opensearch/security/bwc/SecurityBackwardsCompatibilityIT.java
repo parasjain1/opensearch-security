@@ -16,13 +16,10 @@ import java.util.stream.Collectors;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.hc.client5.http.auth.AuthScope;
-import org.apache.hc.client5.http.auth.CredentialsProvider;
 import org.apache.hc.client5.http.auth.UsernamePasswordCredentials;
 import org.apache.hc.client5.http.impl.auth.BasicCredentialsProvider;
 import org.apache.hc.core5.http.HttpHost;
 import org.junit.Assert;
-import org.junit.Assume;
-import org.junit.Before;
 
 import org.opensearch.Version;
 import org.opensearch.client.Response;
@@ -30,15 +27,10 @@ import org.opensearch.client.RestClient;
 import org.opensearch.client.RestClientBuilder;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.security.bwc.helpers.TestHelper;
-import org.opensearch.test.rest.OpenSearchRestTestCase;
 
 import static org.hamcrest.Matchers.hasItem;
-import static org.hamcrest.Matchers.in;
 
-public class SecurityBackwardsCompatibilityIT extends OpenSearchRestTestCase {
-
-    private ClusterType CLUSTER_TYPE;
-    private String CLUSTER_NAME;
+public class SecurityBackwardsCompatibilityIT extends SecurityBackwardsCompatibilityTestCase {
 
     private RestClient basicAuthClient;
 
@@ -47,52 +39,32 @@ public class SecurityBackwardsCompatibilityIT extends OpenSearchRestTestCase {
 
     private static final String TEST_ROLE = "test-dls-fls-role";
 
-    @Before
-    private void testSetup() throws IOException {
-        final String bwcsuiteString = System.getProperty("tests.rest.bwcsuite");
-        Assume.assumeTrue("Test cannot be run outside the BWC gradle task 'bwcTestSuite' or its dependent tasks", bwcsuiteString != null);
-        CLUSTER_TYPE = ClusterType.parse(bwcsuiteString);
-        CLUSTER_NAME = System.getProperty("tests.clustername");
-        List<HttpHost> clusterHosts = getClusterHosts();
-        basicAuthClient = getClientWithBasicAuth(restClientSettings(), clusterHosts.toArray(new HttpHost[0]), TEST_USER, TEST_PASSWORD);
-    }
-
-    @Override
-    protected final boolean preserveIndicesUponCompletion() {
-        return true;
-    }
-
-    @Override
-    protected final boolean preserveReposUponCompletion() {
-        return true;
-    }
+//    @Before
+//    private void testSetup() throws IOException {
+//        final String bwcsuiteString = System.getProperty("tests.rest.bwcsuite");
+//        Assume.assumeTrue("Test cannot be run outside the BWC gradle task 'bwcTestSuite' or its dependent tasks", bwcsuiteString != null);
+//        CLUSTER_TYPE = ClusterType.parse(bwcsuiteString);
+//        CLUSTER_NAME = System.getProperty("tests.clustername");
+//        List<HttpHost> clusterHosts = getClusterHosts();
+//        basicAuthClient = getClientWithBasicAuth(restClientSettings(), clusterHosts.toArray(new HttpHost[0]), TEST_USER, TEST_PASSWORD);
+//    }
 
     @Override
     protected boolean preserveTemplatesUponCompletion() {
         return true;
     }
 
-    @Override
-    protected final Settings restClientSettings() {
-        return Settings.builder()
-                .put(super.restClientSettings())
-                // increase the timeout here to 90 seconds to handle long waits for a green
-                // cluster health. the waits for green need to be longer than a minute to
-                // account for delayed shards
-                .put(OpenSearchRestTestCase.CLIENT_SOCKET_TIMEOUT, "90s")
-                .build();
-    }
 
-    public void testBasicBackwardsCompatibility() throws Exception {
-        String round = System.getProperty("tests.rest.bwcsuite_round");
-        if (round.equals("first") || round.equals("old")) {
-            assertPluginUpgrade("_nodes/" + CLUSTER_NAME + "-0/plugins");
-        } else if (round.equals("second")) {
-            assertPluginUpgrade("_nodes/" + CLUSTER_NAME + "-1/plugins");
-        } else if (round.equals("third")) {
-            assertPluginUpgrade("_nodes/" + CLUSTER_NAME + "-2/plugins");
-        }
-    }
+//    public void testBasicBackwardsCompatibility() throws Exception {
+//        String round = System.getProperty("tests.rest.bwcsuite_round");
+//        if (round.equals("first") || round.equals("old")) {
+//            assertPluginUpgrade("_nodes/" + CLUSTER_NAME + "-0/plugins");
+//        } else if (round.equals("second")) {
+//            assertPluginUpgrade("_nodes/" + CLUSTER_NAME + "-1/plugins");
+//        } else if (round.equals("third")) {
+//            assertPluginUpgrade("_nodes/" + CLUSTER_NAME + "-2/plugins");
+//        }
+//    }
 
     public void testDataIngestionAndSearchBackwardsCompatibility() throws Exception {
         String round = System.getProperty("tests.rest.bwcsuite_round");

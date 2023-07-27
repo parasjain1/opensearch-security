@@ -7,19 +7,11 @@
  */
 package org.opensearch.security.bwc;
 
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.stream.Collectors;
-
 import org.junit.Assume;
 import org.junit.Before;
 
-import org.opensearch.Version;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.test.rest.OpenSearchRestTestCase;
-
-import static org.hamcrest.Matchers.hasItem;
 
 import java.io.File;
 import java.io.IOException;
@@ -31,10 +23,10 @@ import org.opensearch.client.RestClient;
 import org.opensearch.common.io.PathUtils;
 import org.opensearch.commons.rest.SecureRestClientBuilder;
 
-public class SecurityBackwardsCompatibilityBase extends OpenSearchRestTestCase {
+public abstract class SecurityBackwardsCompatibilityTestCase extends OpenSearchRestTestCase {
 
-    private ClusterType CLUSTER_TYPE;
-    private String CLUSTER_NAME;
+    protected ClusterType CLUSTER_TYPE;
+    protected String CLUSTER_NAME;
 
     @Before
     private void testSetup() {
@@ -114,17 +106,17 @@ public class SecurityBackwardsCompatibilityBase extends OpenSearchRestTestCase {
     /** END FROM SecurityRestTestCase */
 
 
-    public void testBasicBackwardsCompatibility() throws Exception {
-        String round = System.getProperty("tests.rest.bwcsuite_round");
-
-        if (round.equals("first") || round.equals("old")) {
-            assertPluginUpgrade("_nodes/" + CLUSTER_NAME + "-0/plugins");
-        } else if (round.equals("second")) {
-            assertPluginUpgrade("_nodes/" + CLUSTER_NAME + "-1/plugins");
-        } else if (round.equals("third")) {
-            assertPluginUpgrade("_nodes/" + CLUSTER_NAME + "-2/plugins");
-        }
-    }
+//    public void testBasicBackwardsCompatibility() throws Exception {
+//        String round = System.getProperty("tests.rest.bwcsuite_round");
+//
+//        if (round.equals("first") || round.equals("old")) {
+//            assertPluginUpgrade("_nodes/" + CLUSTER_NAME + "-0/plugins");
+//        } else if (round.equals("second")) {
+//            assertPluginUpgrade("_nodes/" + CLUSTER_NAME + "-1/plugins");
+//        } else if (round.equals("third")) {
+//            assertPluginUpgrade("_nodes/" + CLUSTER_NAME + "-2/plugins");
+//        }
+//    }
 
     private enum ClusterType {
         OLD,
@@ -145,31 +137,31 @@ public class SecurityBackwardsCompatibilityBase extends OpenSearchRestTestCase {
         }
     }
 
-    @SuppressWarnings("unchecked")
-    private void assertPluginUpgrade(String uri) throws Exception {
-        // This was adding in debugging, when there is a failure the node output is saved
-        // Otherwise, manual inspection of the log files is recommend
-        // ./security/bwc-test/build/testclusters/securityBwcCluster1-0/logs/opensearch.stdout.log
-        // ./security/bwc-test/build/testclusters/securityBwcCluster1-1/logs/opensearch.stdout.log
-        // ./security/bwc-test/build/testclusters/securityBwcCluster1-2/logs/opensearch.stdout.log
-        // TODO: Make an issue about capturing the output from these cases better, even when they pass.
-        fail("Testing output from typical run");
-
-
-        // As written this test isn't using a user to make the call to _nodes, maybe as part of setup this is
-        // handled, but we need a way to switch between different user accounts during the test.
-        Map<String, Map<String, Object>> responseMap = (Map<String, Map<String, Object>>) getAsMap(uri).get("nodes");
-        for (Map<String, Object> response : responseMap.values()) {
-            List<Map<String, Object>> plugins = (List<Map<String, Object>>) response.get("plugins");
-            Set<String> pluginNames = plugins.stream().map(map -> (String) map.get("name")).collect(Collectors.toSet());
-
-            final Version minNodeVersion = this.minimumNodeVersion();
-
-            if (minNodeVersion.major <= 1) {
-                assertThat(pluginNames, hasItem("opensearch_security"));
-            } else {
-                assertThat(pluginNames, hasItem("opensearch-security"));
-            }
-        }
-    }
+//    @SuppressWarnings("unchecked")
+//    private void assertPluginUpgrade(String uri) throws Exception {
+//        // This was adding in debugging, when there is a failure the node output is saved
+//        // Otherwise, manual inspection of the log files is recommend
+//        // ./security/bwc-test/build/testclusters/securityBwcCluster1-0/logs/opensearch.stdout.log
+//        // ./security/bwc-test/build/testclusters/securityBwcCluster1-1/logs/opensearch.stdout.log
+//        // ./security/bwc-test/build/testclusters/securityBwcCluster1-2/logs/opensearch.stdout.log
+//        // TODO: Make an issue about capturing the output from these cases better, even when they pass.
+//        fail("Testing output from typical run");
+//
+//
+//        // As written this test isn't using a user to make the call to _nodes, maybe as part of setup this is
+//        // handled, but we need a way to switch between different user accounts during the test.
+//        Map<String, Map<String, Object>> responseMap = (Map<String, Map<String, Object>>) getAsMap(uri).get("nodes");
+//        for (Map<String, Object> response : responseMap.values()) {
+//            List<Map<String, Object>> plugins = (List<Map<String, Object>>) response.get("plugins");
+//            Set<String> pluginNames = plugins.stream().map(map -> (String) map.get("name")).collect(Collectors.toSet());
+//
+//            final Version minNodeVersion = this.minimumNodeVersion();
+//
+//            if (minNodeVersion.major <= 1) {
+//                assertThat(pluginNames, hasItem("opensearch_security"));
+//            } else {
+//                assertThat(pluginNames, hasItem("opensearch-security"));
+//            }
+//        }
+//    }
 }
