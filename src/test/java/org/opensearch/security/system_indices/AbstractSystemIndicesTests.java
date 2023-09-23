@@ -171,7 +171,7 @@ public abstract class AbstractSystemIndicesTests extends SingleClusterTest {
             + action
             + "] and User [name="
             + username
-            + ", backend_roles=[], requestedTenant=null]\"}";
+            + ", backend_roles=[], requestedTenant=]\"}";
     }
 
     void validateForbiddenResponse(RestHelper.HttpResponse response, String action, String user) {
